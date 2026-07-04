@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-heritage-50 text-heritage-900 font-sans antialiased;
+  }
+  ::selection {
+    @apply bg-gold/30 text-heritage-900;
+  }
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-gold;
+  }
+}
+
+@layer components {
+  .glass-card {
+    @apply bg-white/80 backdrop-blur-xl rounded-2xl border border-white/30 shadow-lg;
+  }
+  .story-text {
+    @apply font-serif text-lg leading-relaxed text-heritage-800;
+  }
+  .btn-primary {
+    @apply px-6 py-3 bg-heritage-800 text-white rounded-xl font-semibold hover:bg-heritage-700 transition-all active:scale-95 flex items-center justify-center space-x-2 disabled:cursor-not-allowed;
+  }
+  .btn-gold {
+    @apply px-6 py-3 bg-gold text-white rounded-xl font-semibold hover:bg-gold/90 transition-all active:scale-95 flex items-center justify-center space-x-2 disabled:cursor-not-allowed;
+  }
+  .scroll-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scroll-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}

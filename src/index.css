@@ -35,3 +35,18 @@
     scrollbar-width: none;
   }
 }
+
+/* Belt-and-suspenders for anything animated with plain Tailwind/CSS rather
+   than framer-motion (which already respects prefers-reduced-motion via the
+   MotionConfig wrapper in main.jsx). Caps any remaining animation/transition
+   to near-instant for users who've asked the OS to reduce motion. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

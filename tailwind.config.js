@@ -16,8 +16,16 @@ export default {
           800: '#4a3f3a',
           900: '#2d2420',
         },
-        gold: '#c9a227',
-        saffron: '#ff9933',
+        // gold/saffron are deliberately darker than a typical "marketing" gold/orange.
+        // The lighter originals (#c9a227 / #ff9933) measured ~2.1-2.4:1 contrast
+        // against white — below the WCAG AA 4.5:1 text minimum — for every place
+        // they're used as text or button labels. These shades were chosen to clear
+        // 4.5:1 in both directions (dark-on-white and white-on-solid-fill) while
+        // staying in the same warm palette. See tailwind.config.js history / README
+        // Accessibility section for the contrast math.
+        gold: '#8a6914',
+        'gold-light': '#c9a227',
+        saffron: '#b35900',
         indiaGreen: '#138808',
       },
       fontFamily: {

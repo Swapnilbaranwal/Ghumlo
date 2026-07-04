@@ -272,6 +272,23 @@ Write 2-3 sentences that are culturally accurate, reveal a deeper meaning (not j
   return result.ok ? { ok: true, insight: result.text } : result;
 }
 
+/**
+ * Generate a personalized, actionable suggestion for engaging respectfully
+ * and authentically with local culture at this destination — distinct from
+ * the static illustrative connector profiles, this is a live model call
+ * grounded in the traveler's actual mood/interests.
+ */
+export async function generateConnectionTip({ mood, interests, destination }) {
+  const prompt = `A traveler feeling ${mood} and interested in ${interests.join(', ')} wants to engage authentically with local culture in ${destination.name}, ${destination.state} — not as a tourist watching from a distance, but as a respectful participant.
+
+Suggest one specific, actionable way they could do this during their visit. Ground it in something real about ${destination.name}: one of its intangible heritage traditions (${destination.intangibleHeritage.join(', ')}) or local cuisine (${destination.cuisine.join(', ')}).
+
+Write 2-3 sentences. Be concrete (what to do, roughly where/when) and be honest that showing up with humility and asking permission matters more than any single activity. Avoid generic advice like "be respectful" without specifics.`;
+
+  const result = await callAI(prompt, { temperature: 0.85, maxOutputTokens: 220 });
+  return result.ok ? { ok: true, tip: result.text } : result;
+}
+
 /** Lightweight connectivity check used to show a live/offline badge in the UI. */
 export async function checkAIHealth() {
   if (!isConfigured(getGeminiKey()) && !isConfigured(getGroqKey())) return false;

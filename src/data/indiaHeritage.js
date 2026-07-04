@@ -14,7 +14,7 @@ export const INDIAN_DESTINATIONS = [
     tagline: 'The Eternal City on the Ganges',
     state: 'Uttar Pradesh',
     type: 'Spiritual & Heritage',
-    image: 'https://images.unsplash.com/photo-1561361513-2d000a50f0dc?w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1561359313-0639aad49ca6?w=800&q=80',
     heritageSites: [
       { name: 'Kashi Vishwanath Temple', type: 'Jyotirlinga', built: '1780 (rebuilt)', significance: 'One of 12 Jyotirlingas, destroyed and rebuilt multiple times' },
       { name: 'Sarnath', type: 'Buddhist', built: '3rd century BCE', significance: 'Where Buddha gave his first sermon' },
@@ -124,7 +124,7 @@ export const INDIAN_DESTINATIONS = [
     tagline: 'The Scotland of the East, Where Music is Air',
     state: 'Meghalaya',
     type: 'Nature & Music',
-    image: 'https://images.unsplash.com/photo-1626016440351-64e1c0d6e3b5?w=800&q=80',
+    image: 'https://images.unsplash.com/photo-1593813738953-fb3c93e0769d?w=800&q=80',
     heritageSites: [
       { name: 'Living Root Bridges', type: 'Natural', built: 'Living/Growing', significance: 'Khasi bio-engineering, 500+ years old' },
       { name: 'Nohkalikai Falls', type: 'Waterfall', built: 'Natural', significance: "India's tallest plunge waterfall (340m)" },

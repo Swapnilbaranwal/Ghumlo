@@ -168,10 +168,30 @@ async function callAI(prompt, { temperature, maxOutputTokens, json = false } = {
     return callGroqOnce(prompt, { temperature, maxOutputTokens, json });
   }
 
-  return {
-    ok: false,
-    error: 'No AI provider configured. Add VITE_GEMINI_API_KEY and/or VITE_GROQ_API_KEY to .env and restart the dev server.',
-  };
+  return { ok: false, error: noProviderConfiguredMessage() };
+}
+
+/**
+ * Vite inlines `import.meta.env.VITE_*` values at BUILD time. A `.env` file
+ * only helps `npm run dev`/`npm run build` on your own machine — it is
+ * git-ignored and never reaches a deployed host. If this app is deployed
+ * (Vercel, Netlify, GitHub Pages, etc.) without the same variables added in
+ * that platform's own dashboard, the shipped bundle simply has no key baked
+ * in, and every AI call fails with "no provider configured" even though the
+ * developer's local .env is correct. `import.meta.env.PROD` tells us which
+ * message actually helps the person seeing it.
+ */
+function noProviderConfiguredMessage() {
+  if (import.meta.env.PROD) {
+    return (
+      'No AI provider configured on this deployment. A .env file never reaches a deployed host — ' +
+      'add VITE_GEMINI_API_KEY (and optionally VITE_GROQ_API_KEY) as Environment Variables in your ' +
+      "hosting provider's project settings (e.g. Vercel: Project → Settings → Environment Variables; " +
+      'Netlify: Site configuration → Environment variables), then trigger a new deploy — the keys are ' +
+      'baked in at build time, so editing them alone without redeploying will not fix it.'
+    );
+  }
+  return 'No AI provider configured. Add VITE_GEMINI_API_KEY and/or VITE_GROQ_API_KEY to .env and restart the dev server.';
 }
 
 function extractJson(text) {
@@ -289,9 +309,39 @@ Write 2-3 sentences. Be concrete (what to do, roughly where/when) and be honest 
   return result.ok ? { ok: true, tip: result.text } : result;
 }
 
-/** Lightweight connectivity check used to show a live/offline badge in the UI. */
+// checkAIHealth() fires a real (tiny) network request. DestinationDetail
+// calls it on every mount, and a traveler flipping between several
+// destinations in one session shouldn't cost a fresh round-trip each time —
+// that's a wasted request against the same rate-limited API the actual
+// features depend on. Cache the outcome for a short window instead.
+const HEALTH_CACHE_TTL_MS = 60000;
+let healthCache = null; // { result: boolean, checkedAt: number } | null
+let healthCheckInFlight = null;
+
+/**
+ * Lightweight connectivity check used to show a live/offline badge in the UI.
+ * Memoized for HEALTH_CACHE_TTL_MS so repeated mounts within that window
+ * (e.g. backing out to Matching and opening another destination) reuse the
+ * last result instead of firing a new request every time.
+ */
 export async function checkAIHealth() {
   if (!isConfigured(getGeminiKey()) && !isConfigured(getGroqKey())) return false;
-  const result = await callAI('Reply with exactly: OK', { maxOutputTokens: 10 });
-  return result.ok;
+
+  const now = Date.now();
+  if (healthCache && now - healthCache.checkedAt < HEALTH_CACHE_TTL_MS) {
+    return healthCache.result;
+  }
+  // Two components mounting in the same tick shouldn't double-fire either.
+  if (healthCheckInFlight) return healthCheckInFlight;
+
+  healthCheckInFlight = callAI('Reply with exactly: OK', { maxOutputTokens: 10 })
+    .then((result) => {
+      healthCache = { result: result.ok, checkedAt: Date.now() };
+      return result.ok;
+    })
+    .finally(() => {
+      healthCheckInFlight = null;
+    });
+
+  return healthCheckInFlight;
 }

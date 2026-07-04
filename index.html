@@ -5,6 +5,19 @@
     <link rel="icon" type="image/svg+xml" href="/compass.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Ghumlo — a GenAI-powered platform that helps travelers discover Indian destinations, hidden gems, and authentic cultural experiences." />
+    <!--
+      Content-Security-Policy: this app ships no backend, so keys are visible
+      in the built bundle regardless (documented in README). This CSP doesn't
+      fix that — it limits the *blast radius* if any future dependency ever
+      introduced an XSS: scripts can only load from this origin, and network
+      requests (fetch/XHR/WebSocket) can only reach this origin plus the two
+      AI providers this app actually calls. A compromised script can't quietly
+      exfiltrate data to an attacker-controlled domain.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' https://images.unsplash.com data:; connect-src 'self' https://generativelanguage.googleapis.com https://api.groq.com; object-src 'none'; base-uri 'self'; frame-ancestors 'self';"
+    />
     <title>Ghumlo — Cultural Compass India</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

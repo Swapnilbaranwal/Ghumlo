@@ -5,6 +5,7 @@ import {
   Coffee, UtensilsCrossed, BookMarked, Music, Camera, Landmark, BookOpen,
   Palmtree, Waves, Star,
 } from 'lucide-react';
+import { sanitizeName, NAME_MAX_LENGTH } from '../utils/sanitize.js';
 
 const MOOD_OPTIONS = [
   { label: 'Seeking Peace & Spirituality', value: 'spiritual', desc: 'Inner journey, temples, meditation', icon: Sunrise },
@@ -73,8 +74,9 @@ export default function OnboardingScreen({ onComplete }) {
                   id="traveler-name"
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => setName(sanitizeName(e.target.value))}
                   placeholder="Enter your name..."
+                  maxLength={NAME_MAX_LENGTH}
                   className="w-full p-4 bg-white border-2 border-heritage-200 rounded-xl text-lg focus:border-gold focus:outline-none transition-colors"
                 />
                 <button onClick={() => setStep(2)} disabled={!name.trim()} className="w-full btn-primary disabled:opacity-50">

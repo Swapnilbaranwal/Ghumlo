@@ -49,7 +49,9 @@ describe('DestinationDetail', () => {
     aiService.generateCulturalStory.mockResolvedValue({ ok: true, story: 'A story about the ghats at dawn.' });
     render(<DestinationDetail destination={destination} profile={profile} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole('button', { name: /generate my personal story with ai/i }));
+    // Story tab is code-split (React.lazy), so its button mounts async behind
+    // a Suspense fallback on first render — find it rather than get it.
+    await user.click(await screen.findByRole('button', { name: /generate my personal story with ai/i }));
 
     await waitFor(() => expect(screen.getByText('A story about the ghats at dawn.')).toBeInTheDocument());
     expect(aiService.generateCulturalStory).toHaveBeenCalledWith(
@@ -62,7 +64,7 @@ describe('DestinationDetail', () => {
     aiService.generateCulturalStory.mockResolvedValue({ ok: false, error: 'Gemini (gemini-2.5-flash) error 503: overloaded' });
     render(<DestinationDetail destination={destination} profile={profile} onBack={vi.fn()} />);
 
-    await user.click(screen.getByRole('button', { name: /generate my personal story with ai/i }));
+    await user.click(await screen.findByRole('button', { name: /generate my personal story with ai/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/overloaded/i);
   });
@@ -73,7 +75,7 @@ describe('DestinationDetail', () => {
     aiService.generateCulturalStory.mockReturnValue(new Promise((resolve) => (resolveStory = resolve)));
     render(<DestinationDetail destination={destination} profile={profile} onBack={vi.fn()} />);
 
-    const generateButton = screen.getByRole('button', { name: /generate my personal story with ai/i });
+    const generateButton = await screen.findByRole('button', { name: /generate my personal story with ai/i });
     await user.click(generateButton);
     // Button disappears while loading, so a rapid second click can't reach it —
     // this itself proves the re-entrancy guard's effect at the UI level.

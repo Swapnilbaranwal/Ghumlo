@@ -35,6 +35,10 @@ export const INDIAN_DESTINATIONS = [
     ],
     cuisine: ['Kachori Sabzi', 'Banarasi Paan', 'Litti Chokha', 'Thandai', 'Malaiyo'],
     intangibleHeritage: ['Banarasi Sari Weaving', 'Santoor Music', 'Ramleela Performance'],
+    // Explicit, curated tags matching INTEREST_OPTIONS values in OnboardingScreen.jsx.
+    // Used by matchDestinations() instead of fragile substring guessing, so every
+    // interest checkbox actually moves the ranking (see indiaHeritage.test.js).
+    interestTags: ['temples', 'spiritual', 'music', 'textiles', 'folklore'],
   },
   {
     id: 'jaipur',
@@ -63,6 +67,7 @@ export const INDIAN_DESTINATIONS = [
     ],
     cuisine: ['Dal Baati Churma', 'Laal Maas', 'Ghewar', 'Kachori', 'Lassi'],
     intangibleHeritage: ['Jaipur Blue Pottery', 'Kathputli Puppetry', 'Manganiyar Folk Music'],
+    interestTags: ['craft', 'royal', 'music', 'folklore', 'food'],
   },
   {
     id: 'hampi',
@@ -90,6 +95,7 @@ export const INDIAN_DESTINATIONS = [
     ],
     cuisine: ['Bisi Bele Bath', 'Maddur Vada', 'Dosa', 'Filter Coffee', 'Obbattu'],
     intangibleHeritage: ['Vijayanagara Architecture', 'Kannada Haridasa Music', 'Coracle Making'],
+    interestTags: ['temples', 'spiritual', 'craft', 'folklore'],
   },
   {
     id: 'kochi',
@@ -117,6 +123,7 @@ export const INDIAN_DESTINATIONS = [
     ],
     cuisine: ['Appam with Stew', 'Kerala Fish Curry', 'Puttu', 'Sadhya', 'Banana Chips'],
     intangibleHeritage: ['Kathakali Dance-Drama', 'Kalaripayattu Martial Art', 'Chenda Melam Music'],
+    interestTags: ['coastal', 'food', 'folklore', 'music'],
   },
   {
     id: 'shillong',
@@ -144,6 +151,7 @@ export const INDIAN_DESTINATIONS = [
     ],
     cuisine: ['Jadoh', 'Tungrymbai', 'Dohneiiong', 'Pukhlein', 'Sakin Gata'],
     intangibleHeritage: ['Khasi Oral Epics', 'Duitara Music', 'Living Root Bridge Craft'],
+    interestTags: ['nature', 'music', 'folklore', 'spiritual'],
   },
   {
     id: 'udaipur',
@@ -171,6 +179,7 @@ export const INDIAN_DESTINATIONS = [
     ],
     cuisine: ['Dal Baati Churma', 'Laal Maas', 'Gatte ki Sabzi', 'Ker Sangri', 'Ghevar'],
     intangibleHeritage: ['Mewar Miniature Painting', 'Ghoomar Dance', 'Pichwai Painting'],
+    interestTags: ['royal', 'craft', 'food', 'temples'],
   },
 ];
 
@@ -208,30 +217,48 @@ export function getUpcomingFestivals(referenceDate = new Date()) {
 /**
  * Scores and ranks destinations against a traveler's declared mood + interests.
  * Pure function — deterministic and unit-testable (see src/data/indiaHeritage.test.js).
+ *
+ * NOTE ON A REAL BUG THIS REPLACED: the previous version matched interests
+ * against destination text with ad-hoc substring checks (e.g. does the
+ * destination's `type` string literally contain the interest word). That
+ * silently made several onboarding interest options — "Local Cuisine" (food),
+ * "Folk Art & Stories" (folklore), "Textiles & Weaving" (textiles), and the
+ * type-level bonus for "Ancient Temples" (temples) — score zero matches
+ * against every destination, because none of those words are literal
+ * substrings of the underlying data (e.g. "food" never appears inside a dish
+ * name like "Kachori Sabzi"). That's why picking different interests could
+ * still surface the same 6 destinations in nearly the same order — half the
+ * checkboxes weren't doing anything. Every destination now carries an
+ * explicit, curated `interestTags` array using the same values as
+ * OnboardingScreen's INTEREST_OPTIONS, so every interest checkbox reliably
+ * contributes to the ranking.
  */
 export function matchDestinations(interests = [], mood = '') {
   const norm = (s) => s.toLowerCase();
+  const overlaps = (label) => interests.some((i) => norm(label).includes(norm(i)) || norm(i).includes(norm(label)));
+
   const scored = INDIAN_DESTINATIONS.map((dest) => {
     let score = 0;
 
-    score += dest.vibe.filter((v) =>
-      interests.some((i) => norm(v).includes(norm(i)) || norm(i).includes(norm(v)))
-    ).length * 3;
+    // Primary signal: explicit interest tags (fixes the dead-interest bug above).
+    score += dest.interestTags.filter((tag) => interests.includes(tag)).length * 5;
 
-    if (interests.some((i) => norm(dest.type).includes(norm(i)))) score += 5;
+    // Secondary signals: loose text overlap, still useful for interests that
+    // happen to line up with the descriptive copy (e.g. "royal" vs vibe "Royal").
+    score += dest.vibe.filter(overlaps).length * 3;
+    score += dest.intangibleHeritage.filter(overlaps).length * 2;
+    score += dest.heritageSites.filter((site) => overlaps(site.type) || overlaps(site.name)).length * 2;
 
-    score += dest.intangibleHeritage.filter((h) =>
-      interests.some((i) => norm(h).includes(norm(i)) || norm(i).includes(norm(h)))
-    ).length * 4;
-
-    score += dest.cuisine.filter((c) =>
-      interests.some((i) => norm(c).includes(norm(i)) || norm(i).includes(norm(c)))
-    ).length * 2;
-
+    // Mood bonuses — one per MOOD_OPTIONS value in OnboardingScreen.jsx.
+    // (The previous version only covered 4 of the 6 moods; "foodie" and
+    // "historical" contributed nothing, so those two moods never changed
+    // the ranking at all.)
     if (mood === 'spiritual' && dest.type.includes('Spiritual')) score += 5;
     if (mood === 'adventurous' && dest.type.includes('Nature')) score += 5;
     if (mood === 'romantic' && dest.type.includes('Romantic')) score += 5;
-    if (mood === 'creative' && dest.intangibleHeritage.some((h) => /art|music/i.test(h))) score += 5;
+    if (mood === 'creative' && dest.intangibleHeritage.some((h) => /art|music|paint/i.test(h))) score += 5;
+    if (mood === 'foodie' && dest.interestTags.includes('food')) score += 5;
+    if (mood === 'historical' && (dest.type.includes('Heritage') || dest.type.includes('Archaeological') || dest.interestTags.includes('temples'))) score += 5;
 
     return { ...dest, matchScore: score };
   });

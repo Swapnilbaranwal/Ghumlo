@@ -39,3 +39,32 @@ describe('aiService with no provider configured', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });
+
+describe('checkAIHealth caching', () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.stubEnv('VITE_GEMINI_API_KEY', 'test-key-not-a-placeholder');
+    vi.stubEnv('VITE_GROQ_API_KEY', '');
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('reuses the result of a recent check instead of firing a fresh network call every time', async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: 'OK' }] } }] }),
+    });
+
+    const first = await checkAIHealth();
+    const second = await checkAIHealth();
+
+    expect(first).toBe(true);
+    expect(second).toBe(true);
+    // DestinationDetail mounts this on every destination view — without
+    // caching this would be 2 (or more) real network calls per traveler
+    // session just to render a status badge.
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+});

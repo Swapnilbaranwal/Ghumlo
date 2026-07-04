@@ -7,6 +7,8 @@ import {
   matchScoreToPercent,
 } from './indiaHeritage.js';
 
+const ALL_INTEREST_VALUES = ['music', 'craft', 'temples', 'food', 'folklore', 'textiles', 'spiritual', 'nature', 'royal', 'coastal'];
+
 describe('INDIAN_DESTINATIONS', () => {
   it('has at least one destination with the required shape', () => {
     expect(INDIAN_DESTINATIONS.length).toBeGreaterThan(0);
@@ -16,6 +18,21 @@ describe('INDIAN_DESTINATIONS', () => {
       expect(Array.isArray(dest.heritageSites)).toBe(true);
       expect(dest.heritageSites.length).toBeGreaterThan(0);
       expect(Array.isArray(dest.intangibleHeritage)).toBe(true);
+      expect(Array.isArray(dest.interestTags)).toBe(true);
+      expect(dest.interestTags.length).toBeGreaterThan(0);
+      for (const tag of dest.interestTags) {
+        expect(ALL_INTEREST_VALUES).toContain(tag);
+      }
+    }
+  });
+
+  it('every onboarding interest option matches at least one destination', () => {
+    // Regression test for a real bug: interests that never appeared in any
+    // destination's interestTags silently contributed zero score no matter
+    // what a traveler picked (see matchDestinations' doc comment).
+    for (const value of ALL_INTEREST_VALUES) {
+      const matches = INDIAN_DESTINATIONS.filter((d) => d.interestTags.includes(value));
+      expect(matches.length).toBeGreaterThan(0);
     }
   });
 
@@ -73,6 +90,36 @@ describe('matchDestinations', () => {
 
   it('handles empty interests without throwing', () => {
     expect(() => matchDestinations([], '')).not.toThrow();
+  });
+
+  it('lets previously dead interests (food, folklore, textiles) change the ranking', () => {
+    // Before the interestTags fix, these three values never matched any
+    // destination text and always contributed 0 points.
+    const foodRanked = matchDestinations(['food'], '');
+    const jaipur = foodRanked.find((d) => d.id === 'jaipur');
+    const shillong = foodRanked.find((d) => d.id === 'shillong');
+    expect(jaipur.matchScore).toBeGreaterThan(shillong.matchScore);
+
+    const textilesRanked = matchDestinations(['textiles'], '');
+    expect(textilesRanked[0].id).toBe('varanasi');
+
+    const folkloreRanked = matchDestinations(['folklore'], '');
+    expect(folkloreRanked[0].matchScore).toBeGreaterThan(0);
+  });
+
+  it('applies a mood bonus for every MOOD_OPTIONS value, including foodie and historical', () => {
+    // Before the fix, "foodie" and "historical" moods contributed no bonus
+    // at all, unlike spiritual/adventurous/romantic/creative.
+    const noMood = matchDestinations(['royal'], '');
+    const foodieMood = matchDestinations(['royal'], 'foodie');
+    const jaipurNoMood = noMood.find((d) => d.id === 'jaipur').matchScore;
+    const jaipurFoodie = foodieMood.find((d) => d.id === 'jaipur').matchScore;
+    expect(jaipurFoodie).toBeGreaterThan(jaipurNoMood);
+
+    const historicalMood = matchDestinations(['craft'], 'historical');
+    const varanasiHistorical = historicalMood.find((d) => d.id === 'varanasi').matchScore;
+    const varanasiNoMood = matchDestinations(['craft'], '').find((d) => d.id === 'varanasi').matchScore;
+    expect(varanasiHistorical).toBeGreaterThan(varanasiNoMood);
   });
 });
 

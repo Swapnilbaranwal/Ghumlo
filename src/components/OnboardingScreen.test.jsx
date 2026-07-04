@@ -2,6 +2,22 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import OnboardingScreen from './OnboardingScreen.jsx';
+import { sanitizeName, NAME_MAX_LENGTH } from '../utils/sanitize.js';
+
+describe('sanitizeName', () => {
+  it('strips control characters and angle brackets that could break out of an AI prompt', () => {
+    expect(sanitizeName('Priya\x00\x1F<script>')).toBe('Priyascript');
+  });
+
+  it('caps length so a traveler cannot balloon every AI prompt with a huge name', () => {
+    const long = 'a'.repeat(NAME_MAX_LENGTH + 50);
+    expect(sanitizeName(long)).toHaveLength(NAME_MAX_LENGTH);
+  });
+
+  it('leaves an ordinary name untouched', () => {
+    expect(sanitizeName('Priya Sharma')).toBe('Priya Sharma');
+  });
+});
 
 describe('OnboardingScreen', () => {
   it('walks a user through all three steps and calls onComplete with their profile', async () => {

@@ -1,13 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, BookOpen, Landmark, Calendar, Users, Map, CheckCircle2, AlertCircle, ArrowLeft } from 'lucide-react';
 import { checkAIHealth } from '../services/aiService.js';
-import { VibeBadge } from './ui.jsx';
-import StoryTab from './destination/StoryTab.jsx';
-import HeritageTab from './destination/HeritageTab.jsx';
-import EventsTab from './destination/EventsTab.jsx';
-import LocalsTab from './destination/LocalsTab.jsx';
-import ItineraryTab from './destination/ItineraryTab.jsx';
+import { VibeBadge, LoadingState } from './ui.jsx';
+
+// Lazy-loaded: a traveler only ever looks at one tab at a time, so there's no
+// reason to ship all 5 tabs' code (plus their AI-call wiring) in the initial
+// bundle. Each import() becomes its own chunk, fetched only the first time
+// its tab is opened — cuts initial JS parsed/executed on first paint.
+const StoryTab = lazy(() => import('./destination/StoryTab.jsx'));
+const HeritageTab = lazy(() => import('./destination/HeritageTab.jsx'));
+const EventsTab = lazy(() => import('./destination/EventsTab.jsx'));
+const LocalsTab = lazy(() => import('./destination/LocalsTab.jsx'));
+const ItineraryTab = lazy(() => import('./destination/ItineraryTab.jsx'));
 
 const TABS = [
   { id: 'story', label: 'Story', icon: BookOpen, Component: StoryTab },
@@ -114,7 +119,9 @@ export default function DestinationDetail({ destination, profile, onBack }) {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
           >
-            {ActiveTabComponent && <ActiveTabComponent profile={profile} destination={destination} />}
+            <Suspense fallback={<LoadingState message="Loading this tab..." />}>
+              {ActiveTabComponent && <ActiveTabComponent profile={profile} destination={destination} />}
+            </Suspense>
           </motion.div>
         </AnimatePresence>
       </div>

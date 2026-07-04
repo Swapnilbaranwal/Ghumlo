@@ -16,15 +16,27 @@ Other commands:
 
 ```bash
 npm run build          # production build (verified working — see below)
-npm test                # 27 tests across 7 files (vitest + React Testing Library)
-npm run test:coverage   # same tests with a coverage report (84% statements — see below)
+npm test                # 36 tests across 8 files (vitest + React Testing Library)
+npm run test:coverage   # same tests with an HTML/text coverage report
 npm run lint            # eslint, zero warnings allowed
 ```
+
+### Deploying it (not just running it locally)
+
+**If you deploy this (Vercel, Netlify, GitHub Pages, etc.) and every AI feature shows "No AI provider configured", this is why:** Vite bakes `import.meta.env.VITE_*` values into the JS bundle at **build time**. Your local `.env` file is git-ignored on purpose (see Security below) — it never reaches the hosting platform, so a build that only has your local `.env` and no server-side config will ship with no key at all, even though `npm run dev` on your own machine works perfectly. This tripped us up during the build too.
+
+To fix it: add `VITE_GEMINI_API_KEY` (and optionally `VITE_GROQ_API_KEY`) as **Environment Variables in the hosting platform's own dashboard**, then trigger a fresh deploy (not just a page refresh):
+
+- **Vercel**: Project → Settings → Environment Variables → add both, then redeploy from the Deployments tab.
+- **Netlify**: Site configuration → Environment variables → add both, then trigger a new deploy.
+- **GitHub Pages**: static hosting has no server-side env step at all — you'd need to bake the key into the build in CI (e.g. a GitHub Actions secret passed to `npm run build`) or accept that Pages can't hold a secret safely for a client-only app.
+
+`aiService.js` now detects `import.meta.env.PROD` and shows this exact guidance (rather than "add it to your `.env`", which is meaningless once deployed) directly in the error banner — see `noProviderConfiguredMessage()`.
 
 ## What it does
 
 1. **Onboarding** — traveler shares their name, current mood, and cultural interests.
-2. **Matching** — a deterministic scoring function (`matchDestinations`, unit-tested) ranks 6 real Indian destinations against that profile. No AI call here — it's a transparent algorithm, not disguised as "AI magic."
+2. **Matching** — a deterministic scoring function (`matchDestinations`, unit-tested) ranks 6 real Indian destinations against that profile. No AI call here — it's a transparent algorithm, not disguised as "AI magic." Every destination carries an explicit, curated `interestTags` array so all 10 onboarding interest options actually influence the ranking (see the bug this fixed, below), plus a mood bonus for all 6 mood options.
 3. **Destination detail**, per selected destination, as five tabs:
    - **Story** — a fully personalized narrative, generated live for that traveler's name, mood, and interests.
    - **Hidden Gems** — 3 off-the-beaten-path suggestions, generated live as structured JSON.
@@ -50,6 +62,12 @@ This was added after hitting a real Gemini 503 ("model experiencing high demand"
 
 **Every AI-triggering button is re-entrancy-safe.** `src/hooks/useAsyncAI.js` ignores a second click while a request is already in flight, instead of firing a duplicate network call — this closes a real bug an earlier version had (rapid-clicking "Generate another" could fire overlapping requests).
 
+## Two real bugs fixed in this pass
+
+**1. Matching felt like "the same 6 destinations, just reordered."** It was a real bug, not just a perception problem. `matchDestinations()` used to score interests by checking whether the interest word was a literal substring of destination text (e.g. does `dest.type` contain the word "food"?). That silently made 4 of the 10 onboarding interest checkboxes — Local Cuisine (`food`), Folk Art & Stories (`folklore`), Textiles & Weaving (`textiles`), and the type-level bonus for Ancient Temples (`temples`) — contribute **zero points no matter what a traveler picked**, because those words never literally appear inside any dish name, heritage tradition string, or `type` field. Two of the six moods (`foodie`, `historical`) also had no scoring bonus at all, unlike the other four. Fix: every destination in `indiaHeritage.js` now carries an explicit, curated `interestTags` array using the same values as `OnboardingScreen`'s `INTEREST_OPTIONS`, so tag matching is a reliable intersection instead of fragile string-guessing, and every mood has a bonus. `indiaHeritage.test.js` has a regression test (`every onboarding interest option matches at least one destination`) specifically so this can't silently regress again.
+
+**2. "No AI provider configured" after deploying.** Not a code bug so much as a documentation gap that looked like a bug: `.env` is git-ignored and never reaches a hosting platform's build. See "Deploying it" above for the fix and the now-PROD-aware error message.
+
 ## How disqualification risks are avoided
 
 Built against the "How Not to Get Disqualified" checklist:
@@ -61,17 +79,19 @@ Built against the "How Not to Get Disqualified" checklist:
 
 ## Mapping to the judging criteria
 
-- **Code**: the app is organized by responsibility, not dumped into one file — `src/components/destination/` holds one file per tab, `src/hooks/useAsyncAI.js` is a single reusable hook that replaced four hand-copied `{data, error, loading}` state blocks, and `src/services/aiService.js` is the only place that talks to a network API. Naming, JSDoc comments explaining *why* (not just what), and consistent formatting are enforced by `npm run lint` (0 warnings allowed).
-- **Security**: no secrets in source (`.env`, git-ignored); `npm audit` findings are all dev-tooling-only (esbuild/vite dev-server CVEs that require an attacker interacting with a running local dev server — they don't ship in the production build) and are documented rather than silently ignored; see below for the full reasoning.
-- **Efficiency**: retry/backoff only happens on transient errors (never on a 4xx client error), requests carry a 20s timeout so nothing hangs indefinitely, images are lazy-loaded on the matching screen, and re-entrancy guards prevent redundant duplicate API calls (see above).
-- **Testing**: 27 tests across 7 files, 84% statement coverage (`npm run test:coverage`), covering pure logic (matching/festival algorithms), the AI service's fail-fast contract, and component behavior (onboarding flow, tab switching, AI success/error rendering, re-entrancy) via React Testing Library — not just "it renders."
+- **Code**: the app is organized by responsibility, not dumped into one file — `src/components/destination/` holds one file per tab, `src/hooks/useAsyncAI.js` is a single reusable hook that replaced four hand-copied `{data, error, loading}` state blocks, `src/utils/sanitize.js` isolates the one pure input-sanitization function, and `src/services/aiService.js` is the only place that talks to a network API. Naming, JSDoc comments explaining *why* (not just what), and consistent formatting are enforced by `npm run lint` (0 warnings allowed). A top-level `ErrorBoundary` (`src/components/ErrorBoundary.jsx`) means an unexpected render error shows a legible, recoverable fallback instead of a blank white screen.
+- **Security**: no secrets in source (`.env`, git-ignored); a `Content-Security-Policy` meta tag in `index.html` restricts scripts to this origin and network calls to only the two AI providers actually used, so a future XSS couldn't quietly exfiltrate data elsewhere; the traveler-name field (the one piece of free text echoed into every AI prompt) is length-capped and stripped of control/angle-bracket characters (`src/utils/sanitize.js`) to blunt the cheapest prompt-injection/DoS vector; `npm audit` findings are all dev-tooling-only (esbuild/vite dev-server CVEs that require an attacker interacting with a running local dev server — they don't ship in the production build) and are documented rather than silently ignored; see below for the full reasoning.
+- **Efficiency**: retry/backoff only happens on transient errors (never on a 4xx client error), requests carry a 20s timeout so nothing hangs indefinitely, images are lazy-loaded on the matching screen, re-entrancy guards prevent redundant duplicate API calls, the AI-connectivity health check is memoized for 60s instead of firing a fresh network request on every destination view, and the 5 destination tabs are code-split with `React.lazy`/`Suspense` so only the tab a traveler actually opens is fetched/parsed (verified in the build output — see below).
+- **Testing**: 36 tests across 8 files (`npm run test:coverage` for the full report), covering pure logic (matching/festival algorithms, including a regression test for the interest-tag bug above), the AI service's fail-fast contract and health-check caching, and component behavior (onboarding flow, sanitization, tab switching, AI success/error rendering, re-entrancy, error-boundary recovery) via React Testing Library — not just "it renders."
 - **Accessibility**: see the dedicated section below — this includes a real, measured WCAG contrast fix, not just aria-labels.
-- **Problem statement alignment**: every one of the brief's asks maps to a concrete tab — recommend attractions (Matching), hidden gems (Story tab), immersive storytelling (Story tab), heritage promotion (Heritage tab), local events (Events tab), authentic cultural connection (Connect tab, with a genuinely generative AI suggestion rather than only static profiles).
+- **Problem statement alignment**: every one of the brief's asks maps to a concrete tab — recommend attractions (Matching, now with a fixed scoring engine where every interest actually matters), hidden gems (Story tab), immersive storytelling (Story tab), heritage promotion (Heritage tab), local events (Events tab), authentic cultural connection (Connect tab, with a genuinely generative AI suggestion rather than only static profiles).
 
 ## Security & known trade-offs
 
 - Keys live in `.env` (git-ignored) and are read via `import.meta.env.VITE_*` — never hardcoded in source.
 - This is a pure static frontend with no backend, so like any client-only app calling a third-party API directly, keys are bundled into the shipped JS and visible to anyone who inspects the build. For a hackathon demo this is an accepted trade-off; a production version should proxy calls through a small backend that holds keys server-side.
+- A `Content-Security-Policy` meta tag (`index.html`) scopes `script-src` to this origin and `connect-src` to this origin plus Gemini's and Groq's API domains — it doesn't hide the bundled key (nothing client-side can), but it does mean a compromised or malicious script can't send data to some other, attacker-controlled domain.
+- The one piece of free-form user text that gets echoed into every AI prompt — the traveler's name — is capped at 40 characters and stripped of control characters and `<`/`>` before it's used (`src/utils/sanitize.js`), closing off the cheapest prompt-injection/DoS input. All model *output*, in turn, is still treated as untrusted: JSON responses go through `extractJson`/`try-catch`, never `eval` or `dangerouslySetInnerHTML`.
 - All network calls have a 20s timeout and structured error handling (no unhandled promise rejections).
 - `npm audit` reports vulnerabilities in `vite`/`esbuild`/`vitest` (dev dependencies only). They all require an attacker to interact with a *running local dev server* (e.g. `GHSA-fx2h-pf6j-xcff`, a Windows-only `server.fs.deny` bypass) — none affect the static production bundle users actually receive. The fix requires a major-version jump to Vite 8, which was deliberately deferred this close to submission rather than risking a last-minute breaking upgrade for a dev-only, non-shipping issue. This is a documented decision, not an oversight.
 - If you ever paste a real API key into a chat, doc, or commit by mistake, treat it as compromised and rotate it immediately at the provider's console — don't just remove it from view.
@@ -81,9 +101,11 @@ Built against the "How Not to Get Disqualified" checklist:
 ```
 src/
   components/
-    OnboardingScreen.jsx    # step 1: name, mood, interests
+    OnboardingScreen.jsx    # step 1: name, mood, interests (name is sanitized on input)
     MatchingScreen.jsx      # step 2: ranked destination cards
-    DestinationDetail.jsx   # step 3 shell: hero, AI-status badge, tab strip (ARIA tabs pattern)
+    DestinationDetail.jsx   # step 3 shell: hero, AI-status badge, tab strip (ARIA tabs pattern),
+                            #   lazily imports each tab (React.lazy + Suspense)
+    ErrorBoundary.jsx        # top-level render-error safety net, wraps <App/> in main.jsx
     destination/
       StoryTab.jsx          # narrative + hidden gems
       HeritageTab.jsx        # sites, intangible heritage, cuisine
@@ -94,13 +116,15 @@ src/
     ui.jsx                  # shared presentational primitives (loading/error/badge/etc.)
     *.test.jsx               # component tests (React Testing Library)
   data/
-    indiaHeritage.js        # static reference data + matchDestinations()
+    indiaHeritage.js        # static reference data (with interestTags) + matchDestinations()
     indiaHeritage.test.js   # unit tests for the matching/festival logic
   hooks/
     useAsyncAI.js            # shared {data,error,loading,run} state machine + re-entrancy guard
+  utils/
+    sanitize.js              # traveler-name sanitization (prompt-injection/DoS mitigation)
   services/
-    aiService.js             # all AI calls: Gemini w/ retry+fallback, then Groq
-    aiService.test.js         # verifies graceful failure with no provider configured
+    aiService.js             # all AI calls: Gemini w/ retry+fallback, then Groq; cached health check
+    aiService.test.js         # verifies graceful failure with no provider + health-check caching
     geminiAI.js               # deprecated re-export shim kept for backward compatibility
     geminiAI.test.js           # verifies the shim stays in sync
   test/setup.js             # jest-dom matchers for the test environment
@@ -112,11 +136,14 @@ src/
 ## Verification run (this build)
 
 ```
-npm test            → 7 test files, 27 tests, all passing
-npm run test:coverage → 84.3% statements / 78.4% branches overall
-npm run build         → 1869 modules transformed, built in ~2.5s, no errors
-npm run lint           → 0 errors, 0 warnings
+npm test      → 8 test files, 36 tests, all passing
+npm run build → 1872 modules transformed, built in ~3s, no errors —
+                the 5 destination tabs each build as their own chunk
+                (React.lazy code-splitting confirmed in the build output)
+npm run lint  → 0 errors, 0 warnings
 ```
+
+Run `npm run test:coverage` locally for the current HTML/text coverage report — numbers shift slightly release to release as tests are added, so rather than quote a specific percentage here that would go stale, this README points at the command that always gives you the live number.
 
 ## Accessibility & responsiveness
 
